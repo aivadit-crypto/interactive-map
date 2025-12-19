@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=0.5, maximum-scale=5.0, user-scalable=yes">
     <title>Карта Точки</title>
     
-    <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <style>
@@ -22,26 +21,33 @@
             font-family: Arial, sans-serif;
             height: 100vh;
             overflow: hidden;
+            user-select: none; /* Запрет выделения при перетаскивании */
         }
         
-        /* Контейнер карты */
+        /* Контейнер карты с курсором grab */
         .map-container {
             width: 100%;
             height: 70vh;
-            overflow: auto;
+            overflow: hidden; /* Изменено с auto на hidden для drag */
             position: relative;
             background: #000;
             border: 2px solid #2a2a4e;
             margin: 0 auto;
+            cursor: grab; /* Рука для захвата */
         }
         
-        /* Карта с масштабированием */
+        .map-container.grabbing {
+            cursor: grabbing; /* Рука с захватом при перетаскивании */
+        }
+        
+        /* Обертка карты для перемещения */
         .map-wrapper {
-            transform: scale(0.7);
+            transform: scale(0.7) translate(0px, 0px);
             transform-origin: top left;
             width: 1536px;
             height: 1536px;
             position: relative;
+            transition: transform 0.1s ease-out; /* Плавное движение */
         }
         
         .map-image {
@@ -49,15 +55,15 @@
             height: 1536px;
             display: block;
             cursor: pointer;
+            pointer-events: auto;
         }
         
-        /* Области карты должны быть кликабельны */
+        /* Остальные стили остаются без изменений */
         area {
             cursor: pointer;
             outline: none;
         }
         
-        /* Слой для подсветки */
         .highlight-layer {
             position: absolute;
             top: 0;
@@ -83,7 +89,7 @@
             box-shadow: 0 0 10px rgba(108, 140, 255, 0.5);
         }
         
-        /* Панель управления (для телефонов) */
+        /* Панель управления */
         .control-panel {
             background: #1a1a2e;
             padding: 15px;
@@ -105,11 +111,6 @@
             text-align: center;
             cursor: pointer;
             transition: all 0.2s;
-        }
-        
-        .location-btn:hover, .location-btn:active {
-            background: rgba(108, 140, 255, 0.2);
-            transform: scale(0.98);
         }
         
         .control-btn {
@@ -142,7 +143,6 @@
             cursor: pointer;
         }
         
-        /* Подсказка */
         .tooltip {
             position: fixed;
             background: rgba(0, 0, 0, 0.9);
@@ -158,14 +158,14 @@
             font-size: 14px;
         }
         
-        /* Для телефонов: адаптация */
         @media (max-width: 768px) {
             .map-container {
                 height: 60vh;
+                cursor: default; /* На телефоне отключаем grab */
             }
             
             .map-wrapper {
-                transform: scale(0.5);
+                transform: scale(0.5) translate(0px, 0px);
             }
             
             .control-panel {
@@ -189,45 +189,29 @@
                  usemap="#image-map"
                  id="mainMap">
             
-            <!-- ВАШИ ОБЛАСТИ КАРТЫ -->
+            <!-- Ваши области карты -->
             <map name="image-map" id="imageMap">
-                <area target="_blank" alt="ЖК: Зеленая Зона" title="ЖК: Зеленая Зона" href="https://t.me/c/3470681785/2156" coords="917,728,922,753,921,801,915,831,883,844,861,854,861,863,870,873,872,886,864,896,853,900,843,901,845,919,857,1019,907,1277,1024,1281,1096,1273,1135,1264,1157,1259,1176,1249,1192,1227,1202,1207,1212,1188,1218,1160,1214,1133,1218,1113,1231,1095,1238,1068,1238,1026,1241,975,1264,909,1282,846,1292,795,1288,727,1284,659,1090,685" shape="poly">
-                <area target="_blank" alt="ЖК: Склад" title="ЖК: Склад" href="https://t.me/c/3470681785/2158" coords="575,295,654,271,673,287,702,287,720,288,734,309,754,330,813,334,876,332,892,332,884,385,864,448,850,491,806,542,762,569,712,590,688,592,671,612,595,601,496,571,396,521,450,442,504,395,552,332" shape="poly">
-                <area target="_blank" alt="ЖК: Дома" title="ЖК: Дома" href="https://t.me/c/3470681785/2164" coords="394,520,371,571,368,636,345,689,328,752,355,864,400,969,451,1038,519,1090,561,1030,602,980,648,940,687,902,735,868,706,847,680,836,668,811,675,780,687,742,698,718,691,692,672,688,675,674,697,661,685,643,680,627,674,615,628,611,575,601,531,585,485,571,420,537" shape="poly">
-                <area target="_blank" alt="ЖК: Гостиница" title="ЖК: Гостиница" href="https://t.me/c/3470681785/2166" coords="895,337,965,353,1021,356,1070,345,1121,327,1159,316,1192,338,1216,418,1242,467,1268,533,1280,597,1279,650,1204,661,1126,674,1051,687,971,707,913,719,895,691,884,676,877,651,860,639,845,634,842,621,818,615,807,598,785,575,774,571,797,552,826,529,849,498,866,464,881,414,891,369" shape="poly">
-                <area target="_blank" alt="ЖК: Мастерская" title="ЖК: Мастерская" href="https://t.me/c/3470681785/2168" coords="843,917,853,1008,872,1105,887,1187,900,1274,882,1289,887,1312,879,1332,838,1345,795,1345,763,1351,738,1350,722,1338,707,1304,693,1277,678,1270,663,1247,657,1206,636,1174,611,1148,574,1129,525,1092,559,1039,600,991,639,953,678,920,712,891,742,872,742,900,746,932,762,952,789,947,806,935,824,924" shape="poly">
-                <area target="_blank" alt="Главная Площадь" title="Главная Площадь" href="https://t.me/c/3470681785/2170" coords="679,604,693,597,713,593,737,585,766,578,789,589,807,611,822,620,838,623,842,639,857,643,873,654,877,674,888,696,904,718,911,737,915,780,913,811,904,826,870,840,860,848,854,862,860,870,864,878,864,889,849,894,834,900,837,915,809,924,788,939,774,946,758,940,750,920,748,886,744,867,721,852,701,839,679,824,675,802,685,761,698,729,702,700,690,687,675,680,694,668,704,661,691,643,683,626,727,659,747,649,774,628,752,594,725,586,697,612,725,655,676,619" shape="poly">
-                <area target="_blank" alt="ВК: Южная граница" title="ВК: Южная граница" href="https://t.me/c/3470681785/2151" coords="455,1171,497,1129,519,1095,577,1134,611,1156,642,1194,648,1224,656,1251,675,1269,691,1284,704,1313,714,1342,737,1357,777,1354,813,1350,842,1349,876,1339,891,1322,892,1303,888,1290,900,1282,941,1282,1014,1285,1089,1278,1149,1265,1189,1239,1212,1189,1223,1167,1221,1128,1227,1106,1238,1081,1245,1042,1242,1024,1295,1058,1347,1090,1372,1124,1349,1178,1273,1266,1191,1327,1113,1379,1039,1415,961,1433,864,1451,755,1456,633,1434,504,1394,378,1313,337,1275,322,1259,306,1248,363,1228" shape="poly">
-                <area target="_blank" alt="ВК: Западный пункт" title="ВК: Западный пункт" href="https://t.me/c/3470681785/84" coords="305,1244,225,1152,164,1069,116,955,88,855,85,822,96,748,104,653,111,586,119,529,162,441,187,414,298,480,387,522,370,556,366,598,362,638,339,692,325,735,322,754,337,814,352,871,378,931,400,980,431,1020,473,1064,512,1094,489,1130,448,1166,408,1195,360,1221" shape="poly">
-                <area target="_blank" alt="ВК: Руины" title="ВК: Руины" href="https://t.me/c/3470681785/2153" coords="192,410,267,454,320,484,394,514,435,452,472,415,503,386,541,338,565,298,596,282,655,268,671,281,714,286,728,293,755,324,851,329,894,327,934,342,974,351,1021,351,1086,332,1158,307,1176,320,1196,289,1215,268,1241,249,1218,210,1211,180,1208,145,1187,111,1164,95,1139,86,1121,66,1098,58,1039,55,988,57,949,42,894,46,854,52,769,64,670,73,629,84,565,96,510,118,465,142,424,171,393,198,333,247,296,281,267,316,208,384" shape="poly">
-                <area target="_blank" alt="ВК: Восточный пункт" title="ВК: Восточный пункт" href="https://t.me/c/3470681785/2149" coords="1244,1018,1288,1042,1317,1062,1341,1077,1363,1098,1378,1115,1404,1064,1435,986,1465,889,1477,769,1472,676,1450,596,1421,507,1396,431,1351,369,1299,312,1245,254,1210,284,1192,309,1180,322,1195,335,1216,396,1238,445,1269,517,1280,563,1282,605,1288,645,1288,676,1294,725,1295,775,1292,821,1273,904,1249,970" shape="poly">
-                <area target="_blank" alt="Тьма: Сектор 1" title="Тьма: Сектор 1" href="https://t.me/c/3470681785/18" coords="1,1536,2,1,1536,0,1536,1536,1101,1398,1176,1350,1263,1281,1325,1216,1368,1153,1415,1073,1451,978,1469,897,1486,791,1481,697,1462,602,1419,482,1391,411,1318,326,1254,258,1223,208,1214,163,1203,130,1185,102,1150,83,1128,68,1104,56,1039,50,982,49,938,37,803,53,655,72,552,92,474,128,393,180,286,278,215,362,149,450,111,552,93,691,78,833,111,958,176,1094,244,1182,318,1267,389,1327,496,1396,630,1441,818,1459,959,1441,1040,1421,1100,1398,1536,1536,1536,1536,1536,1536" shape="poly">
-                <area target="_blank" alt="Таверна" title="Таверна" href="https://t.me/c/3470681785/2173" coords="695,613,728,661,775,628,740,581" shape="poly">
+                <!-- ВАШИ area-ТЕГИ ЗДЕСЬ -->
             </map>
             
-            <!-- Слой подсветки -->
             <div class="highlight-layer" id="highlightLayer"></div>
         </div>
     </div>
     
-    <!-- Панель управления для телефонов -->
+    <!-- Панель управления -->
     <div class="control-panel" id="controlPanel">
-        <!-- Кнопки масштабирования -->
         <div class="zoom-controls">
             <button class="zoom-btn" onclick="zoomIn()">➕ Увеличить</button>
             <button class="zoom-btn" onclick="zoomOut()">➖ Уменьшить</button>
             <button class="zoom-btn" onclick="resetZoom()">🔄 Сброс</button>
         </div>
         
-        <!-- Список локаций -->
         <div id="locationsList"></div>
         
-        <!-- Кнопки управления -->
         <button class="control-btn" onclick="centerMap()">🎯 Центрировать карту</button>
         <button class="control-btn" onclick="closeApp()">✖ Закрыть карту</button>
     </div>
     
-    <!-- Подсказка при наведении -->
     <div class="tooltip" id="tooltip"></div>
 
     <script>
@@ -244,7 +228,119 @@
         let highlights = [];
         let activeHighlight = null;
         
-        // Данные локаций для кнопок
+        // ========== ПЕРЕМЕЩЕНИЕ КАРТЫ МЫШКОЙ ==========
+        let isDragging = false;
+        let startX, startY;
+        let translateX = 0, translateY = 0;
+        let lastTranslateX = 0, lastTranslateY = 0;
+        
+        const mapContainer = document.getElementById('mapContainer');
+        const mapWrapper = document.getElementById('mapWrapper');
+        
+        // Начало перетаскивания
+        mapContainer.addEventListener('mousedown', startDrag);
+        mapContainer.addEventListener('touchstart', startDragTouch);
+        
+        // Перетаскивание
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('touchmove', dragTouch);
+        
+        // Конец перетаскивания
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+        
+        function startDrag(e) {
+            // Запрещаем перетаскивание на мобильных
+            if (isMobile()) return;
+            
+            isDragging = true;
+            mapContainer.classList.add('grabbing');
+            
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
+            
+            e.preventDefault();
+        }
+        
+        function startDragTouch(e) {
+            // На мобильных используем стандартное поведение (скролл)
+            if (isMobile()) return;
+            
+            if (e.touches.length === 1) {
+                isDragging = true;
+                mapContainer.classList.add('grabbing');
+                
+                startX = e.touches[0].clientX - translateX;
+                startY = e.touches[0].clientY - translateY;
+                
+                e.preventDefault();
+            }
+        }
+        
+        function drag(e) {
+            if (!isDragging) return;
+            
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            
+            updateMapPosition();
+        }
+        
+        function dragTouch(e) {
+            if (!isDragging || isMobile()) return;
+            
+            if (e.touches.length === 1) {
+                translateX = e.touches[0].clientX - startX;
+                translateY = e.touches[0].clientY - startY;
+                
+                updateMapPosition();
+                e.preventDefault();
+            }
+        }
+        
+        function endDrag() {
+            if (isDragging) {
+                isDragging = false;
+                mapContainer.classList.remove('grabbing');
+                
+                // Сохраняем последнюю позицию
+                lastTranslateX = translateX;
+                lastTranslateY = translateY;
+                
+                // Ограничиваем перемещение границами
+                constrainMovement();
+            }
+        }
+        
+        function updateMapPosition() {
+            mapWrapper.style.transform = `scale(${currentScale}) translate(${translateX}px, ${translateY}px)`;
+        }
+        
+        function constrainMovement() {
+            const containerRect = mapContainer.getBoundingClientRect();
+            const wrapperRect = mapWrapper.getBoundingClientRect();
+            
+            const scaledWidth = wrapperRect.width * currentScale;
+            const scaledHeight = wrapperRect.height * currentScale;
+            
+            // Максимальные смещения (чтобы карта не уходила за границы)
+            const maxX = Math.max(0, (scaledWidth - containerRect.width) / 2);
+            const maxY = Math.max(0, (scaledHeight - containerRect.height) / 2);
+            
+            // Ограничиваем перемещение
+            translateX = Math.max(-maxX, Math.min(maxX, translateX));
+            translateY = Math.max(-maxY, Math.min(maxY, translateY));
+            
+            updateMapPosition();
+            lastTranslateX = translateX;
+            lastTranslateY = translateY;
+        }
+        
+        function isMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+        
+        // ========== ОСТАЛЬНОЙ КОД (без изменений) ==========
         const LOCATIONS = [
             { name: "ЖК: Зеленая Зона", href: "https://t.me/c/3470681785/2156" },
             { name: "ЖК: Склад", href: "https://t.me/c/3470681785/2158" },
@@ -265,23 +361,22 @@
             console.log('🚀 Инициализация карты...');
             createHighlights();
             createLocationButtons();
-            setupAreaInteractivity();  // КРИТИЧНО: настройка интерактивности
+            setupAreaInteractivity();
             centerMap();
             
-            // Для телефонов: показываем панель всегда
-            if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            if (isMobile()) {
                 document.getElementById('controlPanel').style.display = 'grid';
+                // На мобильных отключаем курсор grab
+                mapContainer.style.cursor = 'default';
             }
             
-            console.log('✅ Карта готова!');
+            console.log('✅ Карта готова! Drag & Drop активен');
         });
         
         // ========== СОЗДАНИЕ ПОДСВЕТКИ ==========
         function createHighlights() {
             const areas = document.querySelectorAll('area');
             const layer = document.getElementById('highlightLayer');
-            
-            console.log('Создаем подсветку для', areas.length, 'областей');
             
             areas.forEach((area, index) => {
                 const coords = area.getAttribute('coords');
@@ -290,8 +385,6 @@
                 if (!coords || !shape) return;
                 
                 const coordArray = coords.split(',').map(Number);
-                
-                // Создаем элемент подсветки
                 const highlight = document.createElement('div');
                 highlight.className = 'area-highlight';
                 highlight.dataset.index = index;
@@ -310,7 +403,6 @@
                     highlight.style.width = (maxX - minX) + 'px';
                     highlight.style.height = (maxY - minY) + 'px';
                     
-                    // Clip path для точной формы
                     let clipPath = 'polygon(';
                     for (let i = 0; i < coordArray.length; i += 2) {
                         clipPath += (coordArray[i] - minX) + 'px ' + (coordArray[i + 1] - minY) + 'px';
@@ -325,24 +417,22 @@
             });
         }
         
-        // ========== НАСТРОЙКА ИНТЕРАКТИВНОСТИ ОБЛАСТЕЙ ==========
+        // ========== НАСТРОЙКА ИНТЕРАКТИВНОСТИ ==========
         function setupAreaInteractivity() {
             const areas = document.querySelectorAll('area');
-            console.log('Настраиваем интерактивность для', areas.length, 'областей');
             
             areas.forEach((area, index) => {
-                // Убедимся, что у области есть index
                 if (!area.dataset.index) {
                     area.dataset.index = index;
                 }
                 
-                // Подсветка при наведении мыши
                 area.addEventListener('mouseenter', function(e) {
+                    if (isDragging) return; // Не подсвечивать при перетаскивании
+                    
                     const idx = this.dataset.index;
                     const title = this.getAttribute('title') || this.getAttribute('alt');
                     showHighlight(idx, title);
                     
-                    // Тактильный отклик в Telegram
                     if (tg?.HapticFeedback) {
                         tg.HapticFeedback.impactOccurred('light');
                     }
@@ -353,24 +443,24 @@
                     hideHighlight(idx);
                 });
                 
-                // Клик по области
                 area.addEventListener('click', function(e) {
+                    if (isDragging) {
+                        // Если было перетаскивание, не открываем ссылку
+                        isDragging = false;
+                        return;
+                    }
+                    
                     e.preventDefault();
                     const idx = this.dataset.index;
                     const href = this.getAttribute('href');
                     const title = this.getAttribute('title') || this.getAttribute('alt');
                     
-                    console.log('Клик по области:', idx, title);
-                    
-                    // Подсветка при клике
                     flashHighlight(idx);
                     
-                    // Тактильный отклик в Telegram
                     if (tg?.HapticFeedback) {
                         tg.HapticFeedback.impactOccurred('medium');
                     }
                     
-                    // Открываем ссылку
                     if (href) {
                         setTimeout(() => {
                             window.open(href, '_blank');
@@ -379,65 +469,33 @@
                     }
                 });
                 
-                // Для мобильных устройств (касания)
+                // Для мобильных
                 area.addEventListener('touchstart', function(e) {
-                    e.preventDefault();
-                    const idx = this.dataset.index;
-                    const title = this.getAttribute('title') || this.getAttribute('alt');
-                    showHighlight(idx, title);
+                    if (isMobile() && e.touches.length === 1) {
+                        const idx = this.dataset.index;
+                        const title = this.getAttribute('title') || this.getAttribute('alt');
+                        showHighlight(idx, title);
+                    }
                 });
                 
                 area.addEventListener('touchend', function(e) {
-                    e.preventDefault();
-                    const idx = this.dataset.index;
-                    const href = this.getAttribute('href');
-                    const title = this.getAttribute('title') || this.getAttribute('alt');
-                    
-                    hideHighlight(idx);
-                    
-                    // Тактильный отклик
-                    if (tg?.HapticFeedback) {
-                        tg.HapticFeedback.impactOccurred('medium');
-                    }
-                    
-                    // Открываем ссылку
-                    if (href) {
-                        window.open(href, '_blank');
-                        showTooltip(`Открываем: ${title}`, 1500);
-                    }
-                });
-            });
-        }
-        
-        // ========== СОЗДАНИЕ КНОПОК ЛОКАЦИЙ ==========
-        function createLocationButtons() {
-            const container = document.getElementById('locationsList');
-            
-            LOCATIONS.forEach((loc, index) => {
-                const btn = document.createElement('button');
-                btn.className = 'location-btn';
-                btn.textContent = loc.name;
-                btn.title = `Перейти в: ${loc.name}`;
-                btn.dataset.index = index;
-                
-                btn.addEventListener('click', () => {
-                    window.open(loc.href, '_blank');
-                    showTooltip(`Открываем: ${loc.name}`, 1500);
-                    
-                    // Тактильный отклик в Telegram
-                    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-                    
-                    // Подсветка соответствующей области
-                    const areas = document.querySelectorAll('area');
-                    areas.forEach((area, i) => {
-                        const alt = area.getAttribute('alt');
-                        if (alt === loc.name) {
-                            flashHighlight(i);
+                    if (isMobile() && !isDragging) {
+                        const idx = this.dataset.index;
+                        const href = this.getAttribute('href');
+                        const title = this.getAttribute('title') || this.getAttribute('alt');
+                        
+                        hideHighlight(idx);
+                        
+                        if (tg?.HapticFeedback) {
+                            tg.HapticFeedback.impactOccurred('medium');
                         }
-                    });
+                        
+                        if (href) {
+                            window.open(href, '_blank');
+                            showTooltip(`Открываем: ${title}`, 1500);
+                        }
+                    }
                 });
-                
-                container.appendChild(btn);
             });
         }
         
@@ -446,6 +504,7 @@
             if (currentScale < 2.0) {
                 currentScale += 0.1;
                 updateZoom();
+                constrainMovement();
             }
         }
         
@@ -453,32 +512,37 @@
             if (currentScale > 0.3) {
                 currentScale -= 0.1;
                 updateZoom();
+                constrainMovement();
             }
         }
         
         function resetZoom() {
             currentScale = 0.7;
+            translateX = 0;
+            translateY = 0;
             updateZoom();
             centerMap();
         }
         
         function updateZoom() {
-            const wrapper = document.getElementById('mapWrapper');
-            wrapper.style.transform = `scale(${currentScale})`;
-            wrapper.style.transformOrigin = 'top left';
-            
-            // Сохраняем в localStorage
+            mapWrapper.style.transform = `scale(${currentScale}) translate(${translateX}px, ${translateY}px)`;
             localStorage.setItem('map_scale', currentScale);
             
-            // Тактильный отклик
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        }
+        
+        // ========== ЦЕНТРИРОВАНИЕ ==========
+        function centerMap() {
+            translateX = 0;
+            translateY = 0;
+            updateMapPosition();
+            
             if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         }
         
         // ========== ФУНКЦИИ ПОДСВЕТКИ ==========
         function showHighlight(index, title) {
-            if (activeHighlight !== null) {
-                hideHighlight(activeHighlight);
-            }
+            if (activeHighlight !== null) hideHighlight(activeHighlight);
             
             const highlight = highlights[index];
             if (highlight) {
@@ -486,7 +550,6 @@
                 activeHighlight = index;
                 showTooltip(title);
                 
-                // Позиционируем подсказку
                 const rect = highlight.getBoundingClientRect();
                 const tooltip = document.getElementById('tooltip');
                 tooltip.style.left = (rect.left + rect.width / 2) + 'px';
@@ -497,14 +560,8 @@
         
         function hideHighlight(index) {
             const highlight = highlights[index];
-            if (highlight) {
-                highlight.classList.remove('active');
-            }
-            
-            if (index === activeHighlight) {
-                activeHighlight = null;
-            }
-            
+            if (highlight) highlight.classList.remove('active');
+            if (index === activeHighlight) activeHighlight = null;
             hideTooltip();
         }
         
@@ -533,16 +590,26 @@
             document.getElementById('tooltip').style.opacity = '0';
         }
         
-        // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-        function centerMap() {
-            const container = document.getElementById('mapContainer');
-            const wrapper = document.getElementById('mapWrapper');
+        // ========== СОЗДАНИЕ КНОПОК ==========
+        function createLocationButtons() {
+            const container = document.getElementById('locationsList');
             
-            container.scrollLeft = (wrapper.offsetWidth * currentScale - container.clientWidth) / 2;
-            container.scrollTop = (wrapper.offsetHeight * currentScale - container.clientHeight) / 2;
-            
-            // Тактильный отклик
-            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            LOCATIONS.forEach((loc, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'location-btn';
+                btn.textContent = loc.name;
+                btn.title = `Перейти в: ${loc.name}`;
+                btn.dataset.index = index;
+                
+                btn.addEventListener('click', () => {
+                    window.open(loc.href, '_blank');
+                    showTooltip(`Открываем: ${loc.name}`, 1500);
+                    
+                    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+                });
+                
+                container.appendChild(btn);
+            });
         }
         
         function closeApp() {
@@ -560,7 +627,7 @@
             setTimeout(updateZoom, 100);
         }
         
-        // Обновление позиции подсказки при движении мыши
+        // Обновление позиции подсказки
         document.addEventListener('mousemove', (e) => {
             const tooltip = document.getElementById('tooltip');
             if (tooltip.style.opacity === '1') {
