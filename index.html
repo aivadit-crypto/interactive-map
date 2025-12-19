@@ -12,8 +12,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            -webkit-user-select: none;
-            user-select: none;
+            touch-action: manipulation;
         }
         
         body {
@@ -22,44 +21,54 @@
             font-family: Arial, sans-serif;
             height: 100vh;
             overflow: hidden;
+            user-select: none;
         }
         
-        /* Контейнер карты - КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ */
+        /* Контейнер карты с overflow: hidden */
         .map-container {
             width: 100%;
             height: 70vh;
-            overflow: hidden; /* Всегда hidden для drag */
+            overflow: hidden;
             position: relative;
             background: #000;
             border: 2px solid #2a2a4e;
             margin: 0 auto;
-            cursor: move; /* Изменен курсор */
-            -webkit-touch-callout: none;
+            cursor: grab;
         }
         
-        .map-container.dragging {
+        .map-container.grabbing {
             cursor: grabbing;
         }
         
-        /* Карта с абсолютным позиционированием */
+        /* ОБЕРТКА КАРТЫ - КРИТИЧЕСКИ ВАЖНО */
+        .map-inner-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: visible; /* Разрешаем выход за границы */
+        }
+        
+        /* Карта с масштабированием */
         .map-wrapper {
             position: absolute;
-            width: 1536px;
-            height: 1536px;
             transform: scale(0.7);
             transform-origin: top left;
+            width: 1536px;
+            height: 1536px;
             /* Начальная позиция по центру */
             left: 50%;
             top: 50%;
-            margin-left: -537.6px;
-            margin-top: -537.6px;
-            will-change: transform, left, top; /* Для производительности */
+            margin-left: -537.6px; /* 1536 * 0.7 / 2 */
+            margin-top: -537.6px;  /* 1536 * 0.7 / 2 */
         }
         
         .map-image {
             width: 1536px;
             height: 1536px;
             display: block;
+            cursor: pointer;
             pointer-events: auto;
         }
         
@@ -170,8 +179,8 @@
             
             .map-wrapper {
                 transform: scale(0.5);
-                margin-left: -384px;
-                margin-top: -384px;
+                margin-left: -384px; /* 1536 * 0.5 / 2 */
+                margin-top: -384px;  /* 1536 * 0.5 / 2 */
             }
             
             .control-panel {
@@ -188,19 +197,21 @@
 <body>
     <!-- Карта -->
     <div class="map-container" id="mapContainer">
-        <div class="map-wrapper" id="mapWrapper">
-            <img src="карта с пометками.png" 
-                 alt="Карта Точки" 
-                 class="map-image" 
-                 usemap="#image-map"
-                 id="mainMap">
-            
-            <!-- Ваши области карты -->
-            <map name="image-map" id="imageMap">
-                <!-- ВАШИ area-ТЕГИ ЗДЕСЬ -->
-            </map>
-            
-            <div class="highlight-layer" id="highlightLayer"></div>
+        <div class="map-inner-wrapper" id="mapInnerWrapper">
+            <div class="map-wrapper" id="mapWrapper">
+                <img src="карта с пометками.png" 
+                     alt="Карта Точки" 
+                     class="map-image" 
+                     usemap="#image-map"
+                     id="mainMap">
+                
+                <!-- Ваши области карты -->
+                <map name="image-map" id="imageMap">
+                    <!-- ВАШИ area-ТЕГИ ЗДЕСЬ -->
+                </map>
+                
+                <div class="highlight-layer" id="highlightLayer"></div>
+            </div>
         </div>
     </div>
     
@@ -235,150 +246,111 @@
         let highlights = [];
         let activeHighlight = null;
         
-        // ========== ПЕРЕМЕЩЕНИЕ КАРТЫ (РАБОЧИЙ ВАРИАНТ) ==========
+        // ========== ПЕРЕМЕЩЕНИЕ КАРТЫ ==========
         let isDragging = false;
         let startX, startY;
-        let currentX = 0, currentY = 0;
+        let posX = 0, posY = 0;
         let mapWrapper = document.getElementById('mapWrapper');
         let mapContainer = document.getElementById('mapContainer');
         
-        // В Telegram Web App используем ТОЛЬКО touch события
-        // Mouse события могут не работать
+        // Начальные отступы для центрирования
+        const initialOffsetX = -537.6; // 1536 * 0.7 / 2
+        const initialOffsetY = -537.6;
         
-        // Обработчики для всех устройств
-        mapContainer.addEventListener('pointerdown', startDrag);
-        mapContainer.addEventListener('touchstart', startDrag);
+        // Начало перетаскивания
         mapContainer.addEventListener('mousedown', startDrag);
+        mapContainer.addEventListener('touchstart', startDragTouch);
         
-        document.addEventListener('pointermove', drag);
-        document.addEventListener('touchmove', drag);
+        // Перетаскивание
         document.addEventListener('mousemove', drag);
+        document.addEventListener('touchmove', dragTouch);
         
-        document.addEventListener('pointerup', endDrag);
-        document.addEventListener('touchend', endDrag);
+        // Конец перетаскивания
         document.addEventListener('mouseup', endDrag);
-        
-        // Предотвращаем контекстное меню
-        mapContainer.addEventListener('contextmenu', (e) => e.preventDefault());
+        document.addEventListener('touchend', endDrag);
         
         function startDrag(e) {
-            // Определяем тип события
-            const isTouch = e.type.includes('touch');
-            const isPointer = e.type === 'pointerdown';
+            if (isMobile()) return;
             
-            // Получаем координаты в зависимости от типа события
-            let clientX, clientY;
-            
-            if (isTouch && e.touches) {
-                clientX = e.touches[0].clientX;
-                clientY = e.touches[0].clientY;
-            } else {
-                clientX = e.clientX;
-                clientY = e.clientY;
-            }
-            
-            // Начинаем перетаскивание
             isDragging = true;
-            mapContainer.classList.add('dragging');
+            mapContainer.classList.add('grabbing');
             
-            // Запоминаем начальную позицию
-            startX = clientX - currentX;
-            startY = clientY - currentY;
+            startX = e.clientX - posX;
+            startY = e.clientY - posY;
             
-            // Предотвращаем стандартное поведение
             e.preventDefault();
-            e.stopPropagation();
+        }
+        
+        function startDragTouch(e) {
+            if (isMobile()) return;
             
-            console.log('Начало перетаскивания', { clientX, clientY, currentX, currentY });
-            return false;
+            if (e.touches.length === 1) {
+                isDragging = true;
+                mapContainer.classList.add('grabbing');
+                
+                startX = e.touches[0].clientX - posX;
+                startY = e.touches[0].clientY - posY;
+                
+                e.preventDefault();
+            }
         }
         
         function drag(e) {
             if (!isDragging) return;
             
-            // Определяем тип события
-            const isTouch = e.type.includes('touch');
+            posX = e.clientX - startX;
+            posY = e.clientY - startY;
             
-            // Получаем текущие координаты
-            let clientX, clientY;
-            
-            if (isTouch && e.touches) {
-                clientX = e.touches[0].clientX;
-                clientY = e.touches[0].clientY;
-            } else {
-                clientX = e.clientX;
-                clientY = e.clientY;
-            }
-            
-            // Вычисляем новую позицию
-            currentX = clientX - startX;
-            currentY = clientY - startY;
-            
-            // Ограничиваем перемещение
-            constrainPosition();
-            
-            // Обновляем позицию карты
             updateMapPosition();
-            
-            // Предотвращаем стандартное поведение
-            e.preventDefault();
-            e.stopPropagation();
-            
-            return false;
         }
         
-        function endDrag(e) {
+        function dragTouch(e) {
+            if (!isDragging || isMobile()) return;
+            
+            if (e.touches.length === 1) {
+                posX = e.touches[0].clientX - startX;
+                posY = e.touches[0].clientY - startY;
+                
+                updateMapPosition();
+                e.preventDefault();
+            }
+        }
+        
+        function endDrag() {
             if (isDragging) {
                 isDragging = false;
-                mapContainer.classList.remove('dragging');
+                mapContainer.classList.remove('grabbing');
+                
+                // Ограничиваем перемещение
+                constrainMovement();
                 
                 // Сохраняем позицию
-                savePosition();
-                
-                console.log('Конец перетаскивания', { currentX, currentY });
+                localStorage.setItem('map_pos_x', posX);
+                localStorage.setItem('map_pos_y', posY);
             }
-            
-            e.preventDefault();
-            e.stopPropagation();
-            return false;
         }
         
         function updateMapPosition() {
-            // Плавное обновление позиции
-            mapWrapper.style.transition = 'transform 0.3s ease, left 0.1s linear, top 0.1s linear';
-            mapWrapper.style.left = `calc(50% + ${currentX}px)`;
-            mapWrapper.style.top = `calc(50% + ${currentY}px)`;
+            mapWrapper.style.left = `calc(50% + ${posX}px)`;
+            mapWrapper.style.top = `calc(50% + ${posY}px)`;
         }
         
-        function constrainPosition() {
+        function constrainMovement() {
             const container = mapContainer.getBoundingClientRect();
+            const wrapper = mapWrapper.getBoundingClientRect();
+            
             const scaledWidth = 1536 * currentScale;
             const scaledHeight = 1536 * currentScale;
             
-            // Максимальные смещения (50% от разницы размеров)
+            // Максимальные смещения
             const maxX = Math.max(0, (scaledWidth - container.width) / 2);
             const maxY = Math.max(0, (scaledHeight - container.height) / 2);
             
             // Ограничиваем
-            currentX = Math.max(-maxX, Math.min(maxX, currentX));
-            currentY = Math.max(-maxY, Math.min(maxY, currentY));
-        }
-        
-        function savePosition() {
-            localStorage.setItem('map_pos_x', currentX);
-            localStorage.setItem('map_pos_y', currentY);
-        }
-        
-        function loadPosition() {
-            const savedX = localStorage.getItem('map_pos_x');
-            const savedY = localStorage.getItem('map_pos_y');
+            posX = Math.max(-maxX, Math.min(maxX, posX));
+            posY = Math.max(-maxY, Math.min(maxY, posY));
             
-            if (savedX !== null && savedY !== null) {
-                currentX = parseFloat(savedX);
-                currentY = parseFloat(savedY);
-                updateMapPosition();
-                constrainPosition();
-            }
+            updateMapPosition();
         }
         
         // ========== ОСТАЛЬНОЙ КОД ==========
@@ -401,46 +373,43 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Инициализация карты...');
             
-            // Загружаем сохраненные настройки
-            loadPosition();
-            
-            const savedScale = localStorage.getItem('map_scale');
-            if (savedScale) {
-                currentScale = parseFloat(savedScale);
-                updateZoom();
+            // Загружаем сохраненную позицию
+            const savedX = localStorage.getItem('map_pos_x');
+            const savedY = localStorage.getItem('map_pos_y');
+            if (savedX && savedY) {
+                posX = parseFloat(savedX);
+                posY = parseFloat(savedY);
             }
             
             createHighlights();
             createLocationButtons();
             setupAreaInteractivity();
+            updateMapPosition(); // Применяем позицию
+            constrainMovement(); // Проверяем границы
             
-            // Проверяем, в Telegram ли мы
-            if (tg) {
-                console.log('В Telegram Web App, используем touch события');
-                // Добавляем дополнительную обработку для Telegram
-                setupTelegramSpecificEvents();
+            const savedScale = localStorage.getItem('map_scale');
+            if (savedScale) {
+                currentScale = parseFloat(savedScale);
+                setTimeout(() => {
+                    updateZoom();
+                    constrainMovement();
+                }, 100);
             }
             
             if (isMobile()) {
                 document.getElementById('controlPanel').style.display = 'grid';
+                mapContainer.style.cursor = 'default';
             }
             
-            console.log('✅ Карта готова!');
+            console.log('✅ Карта готова! Drag & Drop работает в Telegram');
         });
-        
-        function setupTelegramSpecificEvents() {
-            // Telegram может требовать особой обработки
-            document.body.style.webkitUserSelect = 'none';
-            document.body.style.webkitTouchCallout = 'none';
-        }
         
         // ========== МАСШТАБИРОВАНИЕ ==========
         function zoomIn() {
             if (currentScale < 2.0) {
                 currentScale += 0.1;
                 updateZoom();
-                constrainPosition();
-                savePosition();
+                constrainMovement();
             }
         }
         
@@ -448,15 +417,14 @@
             if (currentScale > 0.3) {
                 currentScale -= 0.1;
                 updateZoom();
-                constrainPosition();
-                savePosition();
+                constrainMovement();
             }
         }
         
         function resetZoom() {
             currentScale = 0.7;
-            currentX = 0;
-            currentY = 0;
+            posX = 0;
+            posY = 0;
             updateZoom();
             updateMapPosition();
             
@@ -481,10 +449,12 @@
         }
         
         function centerMap() {
-            currentX = 0;
-            currentY = 0;
+            posX = 0;
+            posY = 0;
             updateMapPosition();
-            savePosition();
+            
+            localStorage.removeItem('map_pos_x');
+            localStorage.removeItem('map_pos_y');
             
             if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         }
@@ -545,8 +515,7 @@
                     area.dataset.index = index;
                 }
                 
-                // Используем pointer события для совместимости
-                area.addEventListener('pointerenter', function(e) {
+                area.addEventListener('mouseenter', function(e) {
                     if (isDragging) return;
                     
                     const idx = this.dataset.index;
@@ -558,7 +527,7 @@
                     }
                 });
                 
-                area.addEventListener('pointerleave', function() {
+                area.addEventListener('mouseleave', function() {
                     const idx = this.dataset.index;
                     hideHighlight(idx);
                 });
@@ -667,8 +636,7 @@
             }
         }
         
-        // Обновление позиции подсказки
-        document.addEventListener('pointermove', (e) => {
+        document.addEventListener('mousemove', (e) => {
             const tooltip = document.getElementById('tooltip');
             if (tooltip.style.opacity === '1') {
                 tooltip.style.left = (e.clientX + 15) + 'px';
