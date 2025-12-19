@@ -421,6 +421,32 @@
         window.addEventListener('error', function(e) {
             console.error('Ошибка:', e.message);
         });
+
+        // Автоматическое нажатие кнопки Web App при открытии из бота
+if (window.Telegram && Telegram.WebApp) {
+    // Проверяем, открылись ли мы из бота
+    if (Telegram.WebApp.initData) {
+        // Показываем кнопку "Назад" для возврата в бота
+        Telegram.WebApp.BackButton.show();
+        Telegram.WebApp.BackButton.onClick(function() {
+            Telegram.WebApp.close();
+        });
+    }
+    
+    // Автоматически "эмулируем" нажатие кнопки
+    setTimeout(function() {
+        // Раскрываем на весь экран
+        Telegram.WebApp.expand();
+        
+        // Если есть кнопка в интерфейсе - "нажимаем" её
+        const webAppBtn = document.querySelector('[href*="webapp"]');
+        if (webAppBtn) {
+            webAppBtn.click();
+        }
+    }, 100);
+}
+        
     </script>
 </body>
 </html>
+
