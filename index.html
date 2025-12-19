@@ -21,33 +21,47 @@
             font-family: Arial, sans-serif;
             height: 100vh;
             overflow: hidden;
-            user-select: none; /* Запрет выделения при перетаскивании */
+            user-select: none;
         }
         
-        /* Контейнер карты с курсором grab */
+        /* Контейнер карты с overflow: hidden */
         .map-container {
             width: 100%;
             height: 70vh;
-            overflow: hidden; /* Изменено с auto на hidden для drag */
+            overflow: hidden;
             position: relative;
             background: #000;
             border: 2px solid #2a2a4e;
             margin: 0 auto;
-            cursor: grab; /* Рука для захвата */
+            cursor: grab;
         }
         
         .map-container.grabbing {
-            cursor: grabbing; /* Рука с захватом при перетаскивании */
+            cursor: grabbing;
         }
         
-        /* Обертка карты для перемещения */
+        /* ОБЕРТКА КАРТЫ - КРИТИЧЕСКИ ВАЖНО */
+        .map-inner-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: visible; /* Разрешаем выход за границы */
+        }
+        
+        /* Карта с масштабированием */
         .map-wrapper {
-            transform: scale(0.7) translate(0px, 0px);
+            position: absolute;
+            transform: scale(0.7);
             transform-origin: top left;
             width: 1536px;
             height: 1536px;
-            position: relative;
-            transition: transform 0.1s ease-out; /* Плавное движение */
+            /* Начальная позиция по центру */
+            left: 50%;
+            top: 50%;
+            margin-left: -537.6px; /* 1536 * 0.7 / 2 */
+            margin-top: -537.6px;  /* 1536 * 0.7 / 2 */
         }
         
         .map-image {
@@ -58,7 +72,7 @@
             pointer-events: auto;
         }
         
-        /* Остальные стили остаются без изменений */
+        /* Остальные стили без изменений */
         area {
             cursor: pointer;
             outline: none;
@@ -89,7 +103,6 @@
             box-shadow: 0 0 10px rgba(108, 140, 255, 0.5);
         }
         
-        /* Панель управления */
         .control-panel {
             background: #1a1a2e;
             padding: 15px;
@@ -161,11 +174,13 @@
         @media (max-width: 768px) {
             .map-container {
                 height: 60vh;
-                cursor: default; /* На телефоне отключаем grab */
+                cursor: default;
             }
             
             .map-wrapper {
-                transform: scale(0.5) translate(0px, 0px);
+                transform: scale(0.5);
+                margin-left: -384px; /* 1536 * 0.5 / 2 */
+                margin-top: -384px;  /* 1536 * 0.5 / 2 */
             }
             
             .control-panel {
@@ -182,19 +197,21 @@
 <body>
     <!-- Карта -->
     <div class="map-container" id="mapContainer">
-        <div class="map-wrapper" id="mapWrapper">
-            <img src="карта с пометками.png" 
-                 alt="Карта Точки" 
-                 class="map-image" 
-                 usemap="#image-map"
-                 id="mainMap">
-            
-            <!-- Ваши области карты -->
-            <map name="image-map" id="imageMap">
-                <!-- ВАШИ area-ТЕГИ ЗДЕСЬ -->
-            </map>
-            
-            <div class="highlight-layer" id="highlightLayer"></div>
+        <div class="map-inner-wrapper" id="mapInnerWrapper">
+            <div class="map-wrapper" id="mapWrapper">
+                <img src="карта с пометками.png" 
+                     alt="Карта Точки" 
+                     class="map-image" 
+                     usemap="#image-map"
+                     id="mainMap">
+                
+                <!-- Ваши области карты -->
+                <map name="image-map" id="imageMap">
+                    <!-- ВАШИ area-ТЕГИ ЗДЕСЬ -->
+                </map>
+                
+                <div class="highlight-layer" id="highlightLayer"></div>
+            </div>
         </div>
     </div>
     
@@ -221,6 +238,7 @@
             tg.ready();
             tg.expand();
             tg.setBackgroundColor('#0a0a1a');
+            console.log('✅ Telegram Web App активирован');
         }
         
         // ========== ПЕРЕМЕННЫЕ ==========
@@ -228,14 +246,16 @@
         let highlights = [];
         let activeHighlight = null;
         
-        // ========== ПЕРЕМЕЩЕНИЕ КАРТЫ МЫШКОЙ ==========
+        // ========== ПЕРЕМЕЩЕНИЕ КАРТЫ ==========
         let isDragging = false;
         let startX, startY;
-        let translateX = 0, translateY = 0;
-        let lastTranslateX = 0, lastTranslateY = 0;
+        let posX = 0, posY = 0;
+        let mapWrapper = document.getElementById('mapWrapper');
+        let mapContainer = document.getElementById('mapContainer');
         
-        const mapContainer = document.getElementById('mapContainer');
-        const mapWrapper = document.getElementById('mapWrapper');
+        // Начальные отступы для центрирования
+        const initialOffsetX = -537.6; // 1536 * 0.7 / 2
+        const initialOffsetY = -537.6;
         
         // Начало перетаскивания
         mapContainer.addEventListener('mousedown', startDrag);
@@ -250,28 +270,26 @@
         document.addEventListener('touchend', endDrag);
         
         function startDrag(e) {
-            // Запрещаем перетаскивание на мобильных
             if (isMobile()) return;
             
             isDragging = true;
             mapContainer.classList.add('grabbing');
             
-            startX = e.clientX - translateX;
-            startY = e.clientY - translateY;
+            startX = e.clientX - posX;
+            startY = e.clientY - posY;
             
             e.preventDefault();
         }
         
         function startDragTouch(e) {
-            // На мобильных используем стандартное поведение (скролл)
             if (isMobile()) return;
             
             if (e.touches.length === 1) {
                 isDragging = true;
                 mapContainer.classList.add('grabbing');
                 
-                startX = e.touches[0].clientX - translateX;
-                startY = e.touches[0].clientY - translateY;
+                startX = e.touches[0].clientX - posX;
+                startY = e.touches[0].clientY - posY;
                 
                 e.preventDefault();
             }
@@ -280,8 +298,8 @@
         function drag(e) {
             if (!isDragging) return;
             
-            translateX = e.clientX - startX;
-            translateY = e.clientY - startY;
+            posX = e.clientX - startX;
+            posY = e.clientY - startY;
             
             updateMapPosition();
         }
@@ -290,8 +308,8 @@
             if (!isDragging || isMobile()) return;
             
             if (e.touches.length === 1) {
-                translateX = e.touches[0].clientX - startX;
-                translateY = e.touches[0].clientY - startY;
+                posX = e.touches[0].clientX - startX;
+                posY = e.touches[0].clientY - startY;
                 
                 updateMapPosition();
                 e.preventDefault();
@@ -303,44 +321,39 @@
                 isDragging = false;
                 mapContainer.classList.remove('grabbing');
                 
-                // Сохраняем последнюю позицию
-                lastTranslateX = translateX;
-                lastTranslateY = translateY;
-                
-                // Ограничиваем перемещение границами
+                // Ограничиваем перемещение
                 constrainMovement();
+                
+                // Сохраняем позицию
+                localStorage.setItem('map_pos_x', posX);
+                localStorage.setItem('map_pos_y', posY);
             }
         }
         
         function updateMapPosition() {
-            mapWrapper.style.transform = `scale(${currentScale}) translate(${translateX}px, ${translateY}px)`;
+            mapWrapper.style.left = `calc(50% + ${posX}px)`;
+            mapWrapper.style.top = `calc(50% + ${posY}px)`;
         }
         
         function constrainMovement() {
-            const containerRect = mapContainer.getBoundingClientRect();
-            const wrapperRect = mapWrapper.getBoundingClientRect();
+            const container = mapContainer.getBoundingClientRect();
+            const wrapper = mapWrapper.getBoundingClientRect();
             
-            const scaledWidth = wrapperRect.width * currentScale;
-            const scaledHeight = wrapperRect.height * currentScale;
+            const scaledWidth = 1536 * currentScale;
+            const scaledHeight = 1536 * currentScale;
             
-            // Максимальные смещения (чтобы карта не уходила за границы)
-            const maxX = Math.max(0, (scaledWidth - containerRect.width) / 2);
-            const maxY = Math.max(0, (scaledHeight - containerRect.height) / 2);
+            // Максимальные смещения
+            const maxX = Math.max(0, (scaledWidth - container.width) / 2);
+            const maxY = Math.max(0, (scaledHeight - container.height) / 2);
             
-            // Ограничиваем перемещение
-            translateX = Math.max(-maxX, Math.min(maxX, translateX));
-            translateY = Math.max(-maxY, Math.min(maxY, translateY));
+            // Ограничиваем
+            posX = Math.max(-maxX, Math.min(maxX, posX));
+            posY = Math.max(-maxY, Math.min(maxY, posY));
             
             updateMapPosition();
-            lastTranslateX = translateX;
-            lastTranslateY = translateY;
         }
         
-        function isMobile() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        }
-        
-        // ========== ОСТАЛЬНОЙ КОД (без изменений) ==========
+        // ========== ОСТАЛЬНОЙ КОД ==========
         const LOCATIONS = [
             { name: "ЖК: Зеленая Зона", href: "https://t.me/c/3470681785/2156" },
             { name: "ЖК: Склад", href: "https://t.me/c/3470681785/2158" },
@@ -359,21 +372,98 @@
         // ========== ИНИЦИАЛИЗАЦИЯ ==========
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Инициализация карты...');
+            
+            // Загружаем сохраненную позицию
+            const savedX = localStorage.getItem('map_pos_x');
+            const savedY = localStorage.getItem('map_pos_y');
+            if (savedX && savedY) {
+                posX = parseFloat(savedX);
+                posY = parseFloat(savedY);
+            }
+            
             createHighlights();
             createLocationButtons();
             setupAreaInteractivity();
-            centerMap();
+            updateMapPosition(); // Применяем позицию
+            constrainMovement(); // Проверяем границы
+            
+            const savedScale = localStorage.getItem('map_scale');
+            if (savedScale) {
+                currentScale = parseFloat(savedScale);
+                setTimeout(() => {
+                    updateZoom();
+                    constrainMovement();
+                }, 100);
+            }
             
             if (isMobile()) {
                 document.getElementById('controlPanel').style.display = 'grid';
-                // На мобильных отключаем курсор grab
                 mapContainer.style.cursor = 'default';
             }
             
-            console.log('✅ Карта готова! Drag & Drop активен');
+            console.log('✅ Карта готова! Drag & Drop работает в Telegram');
         });
         
-        // ========== СОЗДАНИЕ ПОДСВЕТКИ ==========
+        // ========== МАСШТАБИРОВАНИЕ ==========
+        function zoomIn() {
+            if (currentScale < 2.0) {
+                currentScale += 0.1;
+                updateZoom();
+                constrainMovement();
+            }
+        }
+        
+        function zoomOut() {
+            if (currentScale > 0.3) {
+                currentScale -= 0.1;
+                updateZoom();
+                constrainMovement();
+            }
+        }
+        
+        function resetZoom() {
+            currentScale = 0.7;
+            posX = 0;
+            posY = 0;
+            updateZoom();
+            updateMapPosition();
+            
+            localStorage.removeItem('map_pos_x');
+            localStorage.removeItem('map_pos_y');
+            
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        }
+        
+        function updateZoom() {
+            mapWrapper.style.transform = `scale(${currentScale})`;
+            
+            // Пересчитываем margin для центрирования
+            const scaledWidth = 1536 * currentScale;
+            const scaledHeight = 1536 * currentScale;
+            mapWrapper.style.marginLeft = `-${scaledWidth / 2}px`;
+            mapWrapper.style.marginTop = `-${scaledHeight / 2}px`;
+            
+            localStorage.setItem('map_scale', currentScale);
+            
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        }
+        
+        function centerMap() {
+            posX = 0;
+            posY = 0;
+            updateMapPosition();
+            
+            localStorage.removeItem('map_pos_x');
+            localStorage.removeItem('map_pos_y');
+            
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        }
+        
+        function isMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+        
+        // ========== ОСТАЛЬНЫЕ ФУНКЦИИ (без изменений) ==========
         function createHighlights() {
             const areas = document.querySelectorAll('area');
             const layer = document.getElementById('highlightLayer');
@@ -417,7 +507,6 @@
             });
         }
         
-        // ========== НАСТРОЙКА ИНТЕРАКТИВНОСТИ ==========
         function setupAreaInteractivity() {
             const areas = document.querySelectorAll('area');
             
@@ -427,7 +516,7 @@
                 }
                 
                 area.addEventListener('mouseenter', function(e) {
-                    if (isDragging) return; // Не подсвечивать при перетаскивании
+                    if (isDragging) return;
                     
                     const idx = this.dataset.index;
                     const title = this.getAttribute('title') || this.getAttribute('alt');
@@ -445,7 +534,6 @@
                 
                 area.addEventListener('click', function(e) {
                     if (isDragging) {
-                        // Если было перетаскивание, не открываем ссылку
                         isDragging = false;
                         return;
                     }
@@ -468,79 +556,30 @@
                         }, 100);
                     }
                 });
-                
-                // Для мобильных
-                area.addEventListener('touchstart', function(e) {
-                    if (isMobile() && e.touches.length === 1) {
-                        const idx = this.dataset.index;
-                        const title = this.getAttribute('title') || this.getAttribute('alt');
-                        showHighlight(idx, title);
-                    }
-                });
-                
-                area.addEventListener('touchend', function(e) {
-                    if (isMobile() && !isDragging) {
-                        const idx = this.dataset.index;
-                        const href = this.getAttribute('href');
-                        const title = this.getAttribute('title') || this.getAttribute('alt');
-                        
-                        hideHighlight(idx);
-                        
-                        if (tg?.HapticFeedback) {
-                            tg.HapticFeedback.impactOccurred('medium');
-                        }
-                        
-                        if (href) {
-                            window.open(href, '_blank');
-                            showTooltip(`Открываем: ${title}`, 1500);
-                        }
-                    }
-                });
             });
         }
         
-        // ========== УПРАВЛЕНИЕ МАСШТАБОМ ==========
-        function zoomIn() {
-            if (currentScale < 2.0) {
-                currentScale += 0.1;
-                updateZoom();
-                constrainMovement();
-            }
-        }
-        
-        function zoomOut() {
-            if (currentScale > 0.3) {
-                currentScale -= 0.1;
-                updateZoom();
-                constrainMovement();
-            }
-        }
-        
-        function resetZoom() {
-            currentScale = 0.7;
-            translateX = 0;
-            translateY = 0;
-            updateZoom();
-            centerMap();
-        }
-        
-        function updateZoom() {
-            mapWrapper.style.transform = `scale(${currentScale}) translate(${translateX}px, ${translateY}px)`;
-            localStorage.setItem('map_scale', currentScale);
+        function createLocationButtons() {
+            const container = document.getElementById('locationsList');
             
-            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            LOCATIONS.forEach((loc, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'location-btn';
+                btn.textContent = loc.name;
+                btn.title = `Перейти в: ${loc.name}`;
+                btn.dataset.index = index;
+                
+                btn.addEventListener('click', () => {
+                    window.open(loc.href, '_blank');
+                    showTooltip(`Открываем: ${loc.name}`, 1500);
+                    
+                    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+                });
+                
+                container.appendChild(btn);
+            });
         }
         
-        // ========== ЦЕНТРИРОВАНИЕ ==========
-        function centerMap() {
-            translateX = 0;
-            translateY = 0;
-            updateMapPosition();
-            
-            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-        }
-        
-        // ========== ФУНКЦИИ ПОДСВЕТКИ ==========
         function showHighlight(index, title) {
             if (activeHighlight !== null) hideHighlight(activeHighlight);
             
@@ -575,7 +614,6 @@
             }
         }
         
-        // ========== ПОДСКАЗКИ ==========
         function showTooltip(text, duration = 2000) {
             const tooltip = document.getElementById('tooltip');
             tooltip.textContent = text;
@@ -590,28 +628,6 @@
             document.getElementById('tooltip').style.opacity = '0';
         }
         
-        // ========== СОЗДАНИЕ КНОПОК ==========
-        function createLocationButtons() {
-            const container = document.getElementById('locationsList');
-            
-            LOCATIONS.forEach((loc, index) => {
-                const btn = document.createElement('button');
-                btn.className = 'location-btn';
-                btn.textContent = loc.name;
-                btn.title = `Перейти в: ${loc.name}`;
-                btn.dataset.index = index;
-                
-                btn.addEventListener('click', () => {
-                    window.open(loc.href, '_blank');
-                    showTooltip(`Открываем: ${loc.name}`, 1500);
-                    
-                    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-                });
-                
-                container.appendChild(btn);
-            });
-        }
-        
         function closeApp() {
             if (tg) {
                 tg.close();
@@ -620,14 +636,6 @@
             }
         }
         
-        // Загрузка сохраненного масштаба
-        const savedScale = localStorage.getItem('map_scale');
-        if (savedScale) {
-            currentScale = parseFloat(savedScale);
-            setTimeout(updateZoom, 100);
-        }
-        
-        // Обновление позиции подсказки
         document.addEventListener('mousemove', (e) => {
             const tooltip = document.getElementById('tooltip');
             if (tooltip.style.opacity === '1') {
