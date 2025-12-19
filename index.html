@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.5, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Карта Точки</title>
     
     <!-- Telegram Web App SDK -->
@@ -14,6 +14,8 @@
             padding: 0;
             box-sizing: border-box;
             touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
         }
         
         body {
@@ -28,7 +30,7 @@
         .map-container {
             width: 100%;
             height: 70vh;
-            overflow: hidden; /* Изменено с auto на hidden */
+            overflow: auto;
             position: relative;
             background: #000;
             border: 2px solid #2a2a4e;
@@ -36,31 +38,21 @@
             cursor: grab;
         }
         
-        .map-container:active {
+        .map-container.dragging {
             cursor: grabbing;
         }
         
         /* Карта с масштабированием */
         .map-wrapper {
-            transform: scale(0.7);
-            transform-origin: top left;
+            transform: scale(1);
+            transform-origin: center center;
             width: 1536px;
             height: 1536px;
-            position: relative;
-            /* Для центрирования изначально */
-            margin-left: auto;
-            margin-right: auto;
-        }
-        
-        /* Для ПК версии - центрирование */
-        @media (min-width: 769px) {
-            .map-wrapper {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%) scale(0.7);
-                transform-origin: center;
-            }
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(1);
+            transition: transform 0.2s ease;
         }
         
         .map-image {
@@ -68,7 +60,7 @@
             height: 1536px;
             display: block;
             cursor: pointer;
-            user-select: none;
+            pointer-events: auto;
         }
         
         /* Области карты должны быть кликабельны */
@@ -103,7 +95,7 @@
             box-shadow: 0 0 10px rgba(108, 140, 255, 0.5);
         }
         
-        /* Панель управления (для телефонов) */
+        /* Панель управления */
         .control-panel {
             background: #1a1a2e;
             padding: 15px;
@@ -125,6 +117,7 @@
             text-align: center;
             cursor: pointer;
             transition: all 0.2s;
+            user-select: none;
         }
         
         .location-btn:hover, .location-btn:active {
@@ -142,6 +135,7 @@
             font-weight: bold;
             cursor: pointer;
             grid-column: span 2;
+            user-select: none;
         }
         
         .zoom-controls {
@@ -160,6 +154,7 @@
             color: white;
             font-size: 18px;
             cursor: pointer;
+            user-select: none;
         }
         
         /* Подсказка */
@@ -178,23 +173,23 @@
             font-size: 14px;
         }
         
+        /* Индикатор масштаба */
+        .scale-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+        
         /* Для телефонов: адаптация */
         @media (max-width: 768px) {
             .map-container {
                 height: 60vh;
-            }
-            
-            .map-wrapper {
-                transform: scale(0.5);
-            }
-            
-            /* На телефонах отключаем центрирование через transform */
-            .map-wrapper {
-                position: relative !important;
-                top: 0 !important;
-                left: 0 !important;
-                transform: scale(0.5) !important;
-                transform-origin: top left !important;
             }
             
             .control-panel {
@@ -206,9 +201,28 @@
                 grid-column: span 1;
             }
         }
+        
+        /* Дебаг стиль для телеграм */
+        .telegram-debug {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 0, 0, 0.7);
+            color: white;
+            padding: 5px;
+            font-size: 10px;
+            z-index: 9999;
+            display: none;
+        }
     </style>
 </head>
 <body>
+    <!-- Дебаг информация (скроется после загрузки) -->
+    <div class="telegram-debug" id="telegramDebug"></div>
+    
+    <!-- Индикатор масштаба -->
+    <div class="scale-indicator" id="scaleIndicator">Масштаб: 100%</div>
+    
     <!-- Карта -->
     <div class="map-container" id="mapContainer">
         <div class="map-wrapper" id="mapWrapper">
@@ -243,17 +257,17 @@
     <div class="control-panel" id="controlPanel">
         <!-- Кнопки масштабирования -->
         <div class="zoom-controls">
-            <button class="zoom-btn" onclick="zoomIn()">➕ Увеличить</button>
-            <button class="zoom-btn" onclick="zoomOut()">➖ Уменьшить</button>
-            <button class="zoom-btn" onclick="resetZoom()">🔄 Сброс</button>
+            <button class="zoom-btn" id="zoomOutBtn">➖ Уменьшить</button>
+            <button class="zoom-btn" id="resetZoomBtn">🔄 Сброс (100%)</button>
+            <button class="zoom-btn" id="zoomInBtn">➕ Увеличить</button>
         </div>
         
         <!-- Список локаций -->
         <div id="locationsList"></div>
         
         <!-- Кнопки управления -->
-        <button class="control-btn" onclick="centerMap()">🎯 Центрировать карту</button>
-        <button class="control-btn" onclick="closeApp()">✖ Закрыть карту</button>
+        <button class="control-btn" id="centerBtn">🎯 Центрировать карту</button>
+        <button class="control-btn" id="closeBtn">✖ Закрыть карту</button>
     </div>
     
     <!-- Подсказка при наведении -->
@@ -266,15 +280,24 @@
             tg.ready();
             tg.expand();
             tg.setBackgroundColor('#0a0a1a');
+            tg.setHeaderColor('#1a1a2e');
+            tg.enableClosingConfirmation();
+            
+            // Показываем дебаг информацию
+            document.getElementById('telegramDebug').style.display = 'block';
+            document.getElementById('telegramDebug').textContent = 'Telegram Web App активен';
         }
         
         // ========== ПЕРЕМЕННЫЕ ==========
-        let currentScale = 0.7;
+        let currentScale = 1.0;
+        let minScale = 0.3;
+        let maxScale = 3.0;
         let highlights = [];
         let activeHighlight = null;
         let isDragging = false;
         let startX, startY;
         let scrollLeft, scrollTop;
+        let isMobileDevice = false;
         
         // Данные локаций для кнопок
         const LOCATIONS = [
@@ -295,18 +318,26 @@
         // ========== ИНИЦИАЛИЗАЦИЯ ==========
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Инициализация карты...');
+            
+            // Определяем мобильное устройство
+            isMobileDevice = isMobile();
+            
             createHighlights();
             createLocationButtons();
             setupAreaInteractivity();
-            setupDragAndDrop(); // Добавлено для перетаскивания
-            centerMap();
+            setupDragAndDrop();
+            setupEventListeners(); // Настраиваем обработчики событий для кнопок
+            updateScaleIndicator();
+            
+            // Центрируем карту через небольшую задержку
+            setTimeout(centerMap, 100);
             
             // Для телефонов: показываем панель всегда
-            if (isMobile()) {
+            if (isMobileDevice) {
                 document.getElementById('controlPanel').style.display = 'grid';
             }
             
-            console.log('✅ Карта готова!');
+            console.log('✅ Карта готова! Текущий масштаб:', currentScale);
         });
         
         // ========== ОПРЕДЕЛЕНИЕ МОБИЛЬНОГО УСТРОЙСТВА ==========
@@ -319,8 +350,7 @@
             const container = document.getElementById('mapContainer');
             const wrapper = document.getElementById('mapWrapper');
             
-            // Только для ПК (не для мобильных)
-            if (isMobile()) return;
+            // Работает как на ПК, так и на мобильных (для мобильных - с учетом особенностей)
             
             // События мыши для десктопа
             container.addEventListener('mousedown', startDragging);
@@ -328,21 +358,64 @@
             container.addEventListener('mouseup', stopDragging);
             container.addEventListener('mouseleave', stopDragging);
             
+            // События касания для мобильных
+            container.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1) {
+                    startDraggingTouch(e);
+                }
+            });
+            
+            container.addEventListener('touchmove', function(e) {
+                if (e.touches.length === 1) {
+                    dragTouch(e);
+                }
+            });
+            
+            container.addEventListener('touchend', stopDragging);
+            container.addEventListener('touchcancel', stopDragging);
+            
             // Предотвращаем выделение текста при перетаскивании
             container.addEventListener('dragstart', (e) => e.preventDefault());
             
             function startDragging(e) {
-                // Проверяем, не кликнули ли по area
-                if (e.target.tagName === 'AREA' || e.target.tagName === 'IMG') {
-                    return; // Позволяем кликнуть по area
+                // Проверяем, не кликнули ли по area или кнопке
+                if (e.target.tagName === 'AREA' || 
+                    e.target.tagName === 'IMG' || 
+                    e.target.tagName === 'BUTTON' ||
+                    e.target.closest('button')) {
+                    return;
                 }
                 
                 isDragging = true;
-                container.style.cursor = 'grabbing';
+                container.classList.add('dragging');
                 
                 // Сохраняем начальные координаты
                 startX = e.pageX - container.offsetLeft;
                 startY = e.pageY - container.offsetTop;
+                scrollLeft = container.scrollLeft;
+                scrollTop = container.scrollTop;
+                
+                e.preventDefault();
+            }
+            
+            function startDraggingTouch(e) {
+                const touch = e.touches[0];
+                
+                // Проверяем, не кликнули ли по area или кнопке
+                const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (target.tagName === 'AREA' || 
+                    target.tagName === 'IMG' || 
+                    target.tagName === 'BUTTON' ||
+                    target.closest('button')) {
+                    return;
+                }
+                
+                isDragging = true;
+                container.classList.add('dragging');
+                
+                // Сохраняем начальные координаты
+                startX = touch.pageX - container.offsetLeft;
+                startY = touch.pageY - container.offsetTop;
                 scrollLeft = container.scrollLeft;
                 scrollTop = container.scrollTop;
                 
@@ -357,18 +430,66 @@
                 const y = e.pageY - container.offsetTop;
                 
                 // Вычисляем расстояние перемещения
-                const walkX = (x - startX) * 1.5; // Множитель для более плавного движения
-                const walkY = (y - startY) * 1.5;
+                const walkX = (x - startX) * 2;
+                const walkY = (y - startY) * 2;
                 
                 // Прокручиваем контейнер
                 container.scrollLeft = scrollLeft - walkX;
                 container.scrollTop = scrollTop - walkY;
+                
+                e.preventDefault();
+            }
+            
+            function dragTouch(e) {
+                if (!isDragging || e.touches.length !== 1) return;
+                
+                const touch = e.touches[0];
+                
+                // Вычисляем новые координаты
+                const x = touch.pageX - container.offsetLeft;
+                const y = touch.pageY - container.offsetTop;
+                
+                // Вычисляем расстояние перемещения
+                const walkX = (x - startX) * 2;
+                const walkY = (y - startY) * 2;
+                
+                // Прокручиваем контейнер
+                container.scrollLeft = scrollLeft - walkX;
+                container.scrollTop = scrollTop - walkY;
+                
+                e.preventDefault();
             }
             
             function stopDragging() {
                 isDragging = false;
-                container.style.cursor = 'grab';
+                container.classList.remove('dragging');
             }
+        }
+        
+        // ========== НАСТРОЙКА ОБРАБОТЧИКОВ СОБЫТИЙ ==========
+        function setupEventListeners() {
+            // Кнопки масштабирования
+            document.getElementById('zoomInBtn').addEventListener('click', zoomIn);
+            document.getElementById('zoomOutBtn').addEventListener('click', zoomOut);
+            document.getElementById('resetZoomBtn').addEventListener('click', resetZoom);
+            
+            // Другие кнопки
+            document.getElementById('centerBtn').addEventListener('click', centerMap);
+            document.getElementById('closeBtn').addEventListener('click', closeApp);
+            
+            // Масштабирование колесиком мыши
+            const container = document.getElementById('mapContainer');
+            container.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                
+                if (e.deltaY < 0) {
+                    // Прокрутка вверх - увеличиваем
+                    zoomIn();
+                } else {
+                    // Прокрутка вниз - уменьшаем
+                    zoomOut();
+                }
+            }, { passive: false });
         }
         
         // ========== СОЗДАНИЕ ПОДСВЕТКИ ==========
@@ -547,42 +668,63 @@
         
         // ========== УПРАВЛЕНИЕ МАСШТАБОМ ==========
         function zoomIn() {
-            if (currentScale < 2.0) {
+            if (currentScale < maxScale) {
                 currentScale += 0.1;
+                currentScale = Math.round(currentScale * 10) / 10; // Округление
                 updateZoom();
+                
+                // Тактильный отклик в Telegram
+                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            } else {
+                showTooltip('Максимальный масштаб достигнут', 1000);
             }
         }
         
         function zoomOut() {
-            if (currentScale > 0.3) {
+            if (currentScale > minScale) {
                 currentScale -= 0.1;
+                currentScale = Math.round(currentScale * 10) / 10; // Округление
                 updateZoom();
+                
+                // Тактильный отклик в Telegram
+                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            } else {
+                showTooltip('Минимальный масштаб достигнут', 1000);
             }
         }
         
         function resetZoom() {
-            currentScale = 0.7;
+            currentScale = 1.0;
             updateZoom();
             centerMap();
+            
+            // Тактильный отклик в Telegram
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         }
         
         function updateZoom() {
             const wrapper = document.getElementById('mapWrapper');
             
-            if (isMobile()) {
-                // Для мобильных - обычное масштабирование
-                wrapper.style.transform = `scale(${currentScale})`;
-                wrapper.style.transformOrigin = 'top left';
-            } else {
-                // Для ПК - центрированное масштабирование
-                wrapper.style.transform = `translate(-50%, -50%) scale(${currentScale})`;
-            }
+            // Обновляем трансформацию
+            wrapper.style.transform = `translate(-50%, -50%) scale(${currentScale})`;
             
             // Сохраняем в localStorage
-            localStorage.setItem('map_scale', currentScale);
+            try {
+                localStorage.setItem('map_scale', currentScale);
+            } catch (e) {
+                console.log('Не удалось сохранить в localStorage:', e);
+            }
             
-            // Тактильный отклик
-            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            // Обновляем индикатор
+            updateScaleIndicator();
+            
+            console.log('Масштаб обновлен:', currentScale);
+        }
+        
+        function updateScaleIndicator() {
+            const indicator = document.getElementById('scaleIndicator');
+            const percentage = Math.round(currentScale * 100);
+            indicator.textContent = `Масштаб: ${percentage}%`;
         }
         
         // ========== ФУНКЦИИ ПОДСВЕТКИ ==========
@@ -649,33 +791,41 @@
             const container = document.getElementById('mapContainer');
             const wrapper = document.getElementById('mapWrapper');
             
-            // Для мобильных устройств - прокрутка
-            if (isMobile()) {
-                container.scrollLeft = (wrapper.offsetWidth * currentScale - container.clientWidth) / 2;
-                container.scrollTop = (wrapper.offsetHeight * currentScale - container.clientHeight) / 2;
-            }
-            // Для ПК - центрирование через transform
-            else {
-                // Уже центрируется через CSS
-            }
+            // Рассчитываем центр
+            const centerX = (wrapper.offsetWidth * currentScale - container.clientWidth) / 2;
+            const centerY = (wrapper.offsetHeight * currentScale - container.clientHeight) / 2;
+            
+            // Прокручиваем к центру
+            container.scrollLeft = centerX;
+            container.scrollTop = centerY;
             
             // Тактильный отклик
             if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            
+            showTooltip('Карта центрирована', 1000);
         }
         
         function closeApp() {
             if (tg) {
                 tg.close();
             } else {
-                alert('Вернитесь в Telegram');
+                if (confirm('Закрыть карту?')) {
+                    window.close();
+                }
             }
         }
         
         // Загрузка сохраненного масштаба
-        const savedScale = localStorage.getItem('map_scale');
-        if (savedScale) {
-            currentScale = parseFloat(savedScale);
-            setTimeout(updateZoom, 100);
+        try {
+            const savedScale = localStorage.getItem('map_scale');
+            if (savedScale) {
+                currentScale = parseFloat(savedScale);
+                // Ограничиваем масштаб
+                currentScale = Math.max(minScale, Math.min(maxScale, currentScale));
+                setTimeout(updateZoom, 100);
+            }
+        } catch (e) {
+            console.log('Не удалось загрузить из localStorage:', e);
         }
         
         // Обновление позиции подсказки при движении мыши
@@ -685,6 +835,34 @@
                 tooltip.style.left = (e.clientX + 15) + 'px';
                 tooltip.style.top = (e.clientY - 40) + 'px';
                 tooltip.style.transform = 'none';
+            }
+        });
+        
+        // Горячие клавиши
+        document.addEventListener('keydown', (e) => {
+            // Плюс для увеличения
+            if (e.key === '+' || e.key === '=') {
+                e.preventDefault();
+                zoomIn();
+            }
+            // Минус для уменьшения
+            else if (e.key === '-' || e.key === '_') {
+                e.preventDefault();
+                zoomOut();
+            }
+            // 0 для сброса масштаба
+            else if (e.key === '0') {
+                e.preventDefault();
+                resetZoom();
+            }
+            // C для центрирования
+            else if (e.key === 'c' || e.key === 'C') {
+                e.preventDefault();
+                centerMap();
+            }
+            // Escape для закрытия (только не в Telegram)
+            else if (e.key === 'Escape' && !tg) {
+                closeApp();
             }
         });
     </script>
