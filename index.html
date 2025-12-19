@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карта Точки</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a1a;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: auto; /* Добавляем горизонтальный скролл если карта большая */
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            width: 100%;
+        }
+        
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+            color: #6c8cff;
+        }
+        
+        .instructions {
+            background: rgba(40, 40, 80, 0.6);
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 1.1rem;
+        }
+        
+        .map-container {
+            position: relative;
+            margin: 20px 0;
+            border: 2px solid #6c8cff;
+            border-radius: 10px;
+            overflow: auto; /* Скролл если карта больше экрана */
+            background: #000;
+            display: inline-block;
+        }
+        
+        .map-image {
+            display: block;
+            width: auto !important;
+            height: auto !important;
+            max-width: none !important;
+            cursor: pointer;
+        }
+        
+        /* Оверлей для подсветки */
+        .area-highlight {
+            position: absolute;
+            background: rgba(108, 140, 255, 0.3);
+            border: 2px solid rgba(108, 140, 255, 0.8);
+            pointer-events: none;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.3s;
+            border-radius: 3px;
+        }
+        
+        .area-highlight.active {
+            opacity: 1;
+            box-shadow: 0 0 15px rgba(108, 140, 255, 0.5);
+        }
+        
+        /* Легенда */
+        .legend {
+            background: rgba(30, 30, 60, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 800px;
+        }
+        
+        .legend h3 {
+            color: #6c8cff;
+            margin-bottom: 15px;
+        }
+        
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 10px;
+        }
+        
+        .legend-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .legend-item:hover {
+            background: rgba(108, 140, 255, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        footer {
+            margin-top: 20px;
+            color: #888;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+        
+        /* Индикатор наведения */
+        .hover-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #6c8cff;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid #6c8cff;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .hover-indicator.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Карта Точки</h1>
+            <div class="instructions">
+                Нажмите на любую область карты, чтобы перейти в соответствующую локацию
+            </div>
+        </header>
+        
+        <main>
+            <!-- Контейнер для карты -->
+            <div class="map-container" id="mapContainer">
+                <!-- Карта с абсолютными координатами -->
+                <img src="карта с пометками.png" alt="Карта Точки" class="map-image" usemap="#image-map" id="mainMap">
+                
+                <!-- Карта кликабельных областей -->
+                <map name="image-map">
+                    <area target="_blank" alt="ЖК: Зеленая Зона" title="ЖК: Зеленая Зона" href="https://t.me/c/3470681785/2156" coords="917,728,922,753,921,801,915,831,883,844,861,854,861,863,870,873,872,886,864,896,853,900,843,901,845,919,857,1019,907,1277,1024,1281,1096,1273,1135,1264,1157,1259,1176,1249,1192,1227,1202,1207,1212,1188,1218,1160,1214,1133,1218,1113,1231,1095,1238,1068,1238,1026,1241,975,1264,909,1282,846,1292,795,1288,727,1284,659,1090,685" shape="poly">
+                    <area target="_blank" alt="ЖК: Склад" title="ЖК: Склад" href="https://t.me/c/3470681785/2158" coords="575,295,654,271,673,287,702,287,720,288,734,309,754,330,813,334,876,332,892,332,884,385,864,448,850,491,806,542,762,569,712,590,688,592,671,612,595,601,496,571,396,521,450,442,504,395,552,332" shape="poly">
+                    <area target="_blank" alt="ЖК: Дома" title="ЖК: Дома" href="https://t.me/c/3470681785/2164" coords="394,520,371,571,368,636,345,689,328,752,355,864,400,969,451,1038,519,1090,561,1030,602,980,648,940,687,902,735,868,706,847,680,836,668,811,675,780,687,742,698,718,691,692,672,688,675,674,697,661,685,643,680,627,674,615,628,611,575,601,531,585,485,571,420,537" shape="poly">
+                    <area target="_blank" alt="ЖК: Гостиница" title="ЖК: Гостиница" href="https://t.me/c/3470681785/2166" coords="895,337,965,353,1021,356,1070,345,1121,327,1159,316,1192,338,1216,418,1242,467,1268,533,1280,597,1279,650,1204,661,1126,674,1051,687,971,707,913,719,895,691,884,676,877,651,860,639,845,634,842,621,818,615,807,598,785,575,774,571,797,552,826,529,849,498,866,464,881,414,891,369" shape="poly">
+                    <area target="_blank" alt="ЖК: Мастерская" title="ЖК: Мастерская" href="https://t.me/c/3470681785/2168" coords="843,917,853,1008,872,1105,887,1187,900,1274,882,1289,887,1312,879,1332,838,1345,795,1345,763,1351,738,1350,722,1338,707,1304,693,1277,678,1270,663,1247,657,1206,636,1174,611,1148,574,1129,525,1092,559,1039,600,991,639,953,678,920,712,891,742,872,742,900,746,932,762,952,789,947,806,935,824,924" shape="poly">
+                    <area target="_blank" alt="Главная Площадь" title="Главная Площадь" href="https://t.me/c/3470681785/2170" 
+coords="679,604,693,597,713,593,737,585,766,578,789,589,807,611,822,620,838,623,842,639,857,643,873,654,877,674,888,696,904,718,911,737,915,780,913,811,904,826,870,840,860,848,854,862,860,870,864,878,864,889,849,894,834,900,837,915,809,924,788,939,774,946,758,940,750,920,748,886,744,867,721,852,701,839,679,824,675,802,685,761,698,729,702,700,690,687,675,680,694,668,704,661,691,643,683,626,727,659,747,649,774,628,752,594,725,586,697,612,725,655,676,619" shape="poly">
+                    <area target="_blank" alt="ВК: Южная граница" title="ВК: Южная граница" href="https://t.me/c/3470681785/2151" coords="455,1171,497,1129,519,1095,577,1134,611,1156,642,1194,648,1224,656,1251,675,1269,691,1284,704,1313,714,1342,737,1357,777,1354,813,1350,842,1349,876,1339,891,1322,892,1303,888,1290,900,1282,941,1282,1014,1285,1089,1278,1149,1265,1189,1239,1212,1189,1223,1167,1221,1128,1227,1106,1238,1081,1245,1042,1242,1024,1295,1058,1347,1090,1372,1124,1349,1178,1273,1266,1191,1327,1113,1379,1039,1415,961,1433,864,1451,755,1456,633,1434,504,1394,378,1313,337,1275,322,1259,306,1248,363,1228" shape="poly">
+                    <area target="_blank" alt="ВК: Западный пункт" title="ВК: Западный пункт" href="https://t.me/c/3470681785/84" coords="305,1244,225,1152,164,1069,116,955,88,855,85,822,96,748,104,653,111,586,119,529,162,441,187,414,298,480,387,522,370,556,366,598,362,638,339,692,325,735,322,754,337,814,352,871,378,931,400,980,431,1020,473,1064,512,1094,489,1130,448,1166,408,1195,360,1221" shape="poly">
+                    <area target="_blank" alt="ВК: Руины" title="ВК: Руины" href="https://t.me/c/3470681785/2153" coords="192,410,267,454,320,484,394,514,435,452,472,415,503,386,541,338,565,298,596,282,655,268,671,281,714,286,728,293,755,324,851,329,894,327,934,342,974,351,1021,351,1086,332,1158,307,1176,320,1196,289,1215,268,1241,249,1218,210,1211,180,1208,145,1187,111,1164,95,1139,86,1121,66,1098,58,1039,55,988,57,949,42,894,46,854,52,769,64,670,73,629,84,565,96,510,118,465,142,424,171,393,198,333,247,296,281,267,316,208,384" shape="poly">
+                    <area target="_blank" alt="ВК: Восточный пункт" title="ВК: Восточный пункт" href="https://t.me/c/3470681785/2149" coords="1244,1018,1288,1042,1317,1062,1341,1077,1363,1098,1378,1115,1404,1064,1435,986,1465,889,1477,769,1472,676,1450,596,1421,507,1396,431,1351,369,1299,312,1245,254,1210,284,1192,309,1180,322,1195,335,1216,396,1238,445,1269,517,1280,563,1282,605,1288,645,1288,676,1294,725,1295,775,1292,821,1273,904,1249,970" shape="poly">
+                    <area target="_blank" alt="Тьма: Сектор 1" title="Тьма: Сектор 1" href="https://t.me/c/3470681785/18" coords="1,1532,2,1,1533,0,1533,1533,1101,1398,1176,1350,1263,1281,1325,1216,1368,1153,1415,1073,1451,978,1469,897,1486,791,1481,697,1462,602,1419,482,1391,411,1318,326,1254,258,1223,208,1214,163,1203,130,1185,102,1150,83,1128,68,1104,56,1039,50,982,49,938,37,803,53,655,72,552,92,474,128,393,180,286,278,215,362,149,450,111,552,93,691,78,833,111,958,176,1094,244,1182,318,1267,389,1327,496,1396,630,1441,818,1459,959,1441,1040,1421,1100,1398,1531,1531,1533,1527,1531,1531" shape="poly">
+                    <area target="_blank" alt="Таверна" title="Таверна" href="https://t.me/c/3470681785/2173" coords="695,613,728,661,775,628,740,581" shape="poly">
+                </map>
+            </div>
+            
+            <!-- Легенда -->
+            <div class="legend">
+                <h3>📋 Все локации (кликните для перехода)</h3>
+                <div class="legend-grid" id="locationsList">
+                    <!-- Заполнится через JS -->
+                </div>
+            </div>
+        </main>
+        
+        <footer>
+            <p>Интерактивная карта Точки | Обновлено: <span id="currentDate"></span></p>
+        </footer>
+    </div>
+    
+    <!-- Индикатор наведения -->
+    <div class="hover-indicator" id="hoverIndicator"></div>
+    
+    <script>
+        // Устанавливаем текущую дату
+        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('ru-RU');
+        
+        // Данные для легенды
+        const locations = [
+            { name: "ЖК: Зеленая Зона", href: "https://t.me/c/3470681785/2156" },
+            { name: "ЖК: Склад", href: "https://t.me/c/3470681785/2158" },
+            { name: "ЖК: Дома", href: "https://t.me/c/3470681785/2164" },
+            { name: "ЖК: Гостиница", href: "https://t.me/c/3470681785/2166" },
+            { name: "ЖК: Мастерская", href: "https://t.me/c/3470681785/2168" },
+            { name: "Главная Площадь", href: "https://t.me/c/3470681785/2170" },
+            { name: "ВК: Южная граница", href: "https://t.me/c/3470681785/2151" },
+            { name: "ВК: Западный пункт", href: "https://t.me/c/3470681785/84" },
+            { name: "ВК: Руины", href: "https://t.me/c/3470681785/2153" },
+            { name: "ВК: Восточный пункт", href: "https://t.me/c/3470681785/2149" },
+            { name: "Тьма: Сектор 1", href: "https://t.me/c/3470681785/18" },
+            { name: "Таверна", href: "https://t.me/c/3470681785/2173" }
+        ];
+        
+        // Заполняем легенду
+        const locationsList = document.getElementById('locationsList');
+        locations.forEach(loc => {
+            const item = document.createElement('div');
+            item.className = 'legend-item';
+            item.textContent = loc.name;
+            item.title = `Кликните для перехода к ${loc.name}`;
+            item.addEventListener('click', () => {
+                window.open(loc.href, '_blank');
+                showHint(`Открываем: ${loc.name}`);
+            });
+            locationsList.appendChild(item);
+        });
+        
+        // Функция для создания подсветки областей
+        function createAreaHighlights() {
+            const areas = document.querySelectorAll('area');
+            const mapContainer = document.getElementById('mapContainer');
+            const hoverIndicator = document.getElementById('hoverIndicator');
+            
+            // Очищаем старые подсветки
+            document.querySelectorAll('.area-highlight').forEach(el => el.remove());
+            
+            areas.forEach((area, index) => {
+                const coords = area.getAttribute('coords').split(',').map(Number);
+                const shape = area.getAttribute('shape');
+                
+                // Создаем элемент подсветки
+                const highlight = document.createElement('div');
+                highlight.className = 'area-highlight';
+                highlight.dataset.areaIndex = index;
+                
+                if (shape === 'poly') {
+                    // Для полигонов находим границы
+                    const xs = coords.filter((_, i) => i % 2 === 0);
+                    const ys = coords.filter((_, i) => i % 2 !== 0);
+                    
+                    const minX = Math.min(...xs);
+                    const minY = Math.min(...ys);
+                    const maxX = Math.max(...xs);
+                    const maxY = Math.max(...ys);
+                    
+                    highlight.style.left = `${minX}px`;
+                    highlight.style.top = `${minY}px`;
+                    highlight.style.width = `${maxX - minX}px`;
+                    highlight.style.height = `${maxY - minY}px`;
+                    highlight.style.clipPath = `polygon(${coords.map((c, i) => {
+                        if (i % 2 === 0) return `${c - minX}px`;
+                        return `${c - minY}px`;
+                    }).reduce((acc, val, i, arr) => {
+                        if (i % 2 === 0) return acc + `${val} `;
+                        if (i === arr.length - 1) return acc + `${val}`;
+                        return acc + `${val}, `;
+                    }, '')})`;
+                }
+                
+                mapContainer.appendChild(highlight);
+                
+                // Добавляем обработчики событий
+                area.addEventListener('mouseenter', (e) => {
+                    highlight.classList.add('active');
+                    hoverIndicator.textContent = area.getAttribute('title');
+                    hoverIndicator.classList.add('visible');
+                });
+                
+                area.addEventListener('mouseleave', () => {
+                    highlight.classList.remove('active');
+                    hoverIndicator.classList.remove('visible');
+                });
+                
+                area.addEventListener('click', () => {
+                    highlight.style.backgroundColor = 'rgba(0, 255, 150, 0.4)';
+                    setTimeout(() => {
+                        highlight.style.backgroundColor = '';
+                    }, 500);
+                });
+            });
+        }
+        
+        // Функция показа подсказки
+        function showHint(text) {
+            const hint = document.createElement('div');
+            hint.textContent = text;
+            hint.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0,0,0,0.9);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                border: 2px solid #6c8cff;
+                z-index: 10000;
+                font-size: 18px;
+                opacity: 0;
+                transition: opacity 0.3s;
+            `;
+            document.body.appendChild(hint);
+            
+            setTimeout(() => hint.style.opacity = '1', 10);
+            setTimeout(() => {
+                hint.style.opacity = '0';
+                setTimeout(() => hint.remove(), 300);
+            }, 1500);
+        }
+        
+        // Инициализация после загрузки карты
+        const mapImage = document.getElementById('mainMap');
+        
+        if (mapImage.complete) {
+            createAreaHighlights();
+        } else {
+            mapImage.addEventListener('load', createAreaHighlights);
+        }
+        
+        // Также инициализируем при изменении размера окна
+        window.addEventListener('resize', createAreaHighlights);
+        
+        // Консольная информация для отладки
+        console.log('Карта загружена. Размеры:', {
+            natural: `${mapImage.naturalWidth} x ${mapImage.naturalHeight}`,
+            displayed: `${mapImage.offsetWidth} x ${mapImage.offsetHeight}`
+        });
+    </script>
+</body>
+</html>
